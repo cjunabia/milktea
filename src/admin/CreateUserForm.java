@@ -7,9 +7,11 @@ package admin;
 
 import Startups.Coffeeshop;
 import config.dbConnect;
+import config.passwordHasher;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.sql.Connection;
+import java.sql.DriverManager;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
@@ -42,7 +44,7 @@ public class CreateUserForm extends javax.swing.JFrame {
     {
         dbConnect dbc = new dbConnect();
     try {
-        String query = "SELECT * FROM users WHERE RegUser = '" + un.getText() + "' OR email = '" + em.getText() + "'";
+        String query = "SELECT * FROM tbl_accounts WHERE u_username = '" + un.getText() + "' OR u_email = '" + em.getText() + "'";
         ResultSet resultSet = dbc.getData(query);
 
         if (resultSet.next()) {
@@ -52,7 +54,7 @@ public class CreateUserForm extends javax.swing.JFrame {
                 em.setText(""); 
             }
 
-            String username = resultSet.getString("RegUser"); 
+            String username = resultSet.getString("username"); 
             if (username.equals(un.getText())) {
                 JOptionPane.showMessageDialog(null, "Username is Already Used!");
                 un.setText(""); 
@@ -328,39 +330,59 @@ public class CreateUserForm extends javax.swing.JFrame {
     }//GEN-LAST:event_CpasswordActionPerformed
 
     private void addActionPerformed(java.awt.event.ActionEvent evt) {//GEN-FIRST:event_addActionPerformed
-        dbConnect dbc = new dbConnect();
-        String uname = un.getText().trim();
-        String pass = new String(this.pass.getPassword()).trim();
-        String Cpass = new String(Cpassword.getPassword()).trim();
-        String e = em.getText().trim();
-        String at = accType.getSelectedItem().toString().trim();
+      dbConnect dbc = new dbConnect();
+    String uname = un.getText().trim();
+    String pass = new String(this.pass.getPassword()).trim();
+    String Cpass = new String(Cpassword.getPassword()).trim();
+    String e = em.getText().trim();
+    String at = accType.getSelectedItem().toString().trim();
 
-        if(uname.isEmpty() || pass.isEmpty() || Cpass.isEmpty() || e.isEmpty() || at.isEmpty())
-        {
-            JOptionPane.showMessageDialog(null, "Please Fill All Boxes");
+    // Input validation
+    if (uname.isEmpty() || pass.isEmpty() || Cpass.isEmpty() || e.isEmpty() || at.isEmpty()) {
+        JOptionPane.showMessageDialog(null, "Please Fill All Boxes");
+        return;
+    } else if (!pass.equals(Cpass)) {
+        JOptionPane.showMessageDialog(null, "Password Does Not Match");
+        return;
+    } else if (pass.length() <= 7) {
+        JOptionPane.showMessageDialog(null, "Password Must Exceed 8 Characters");
+        return;
+    } else if (!e.contains("@") || !e.contains(".com")) {
+        JOptionPane.showMessageDialog(null, "Enter Valid Email");
+        return;
+    } else if (duplicateCheck()) {
+        JOptionPane.showMessageDialog(null, "Username or Email Already Exists");
+        return;
+    }
 
-        }else if(!pass.equals(Cpass))
-        {
-            JOptionPane.showMessageDialog(null, "Password Does Not Match");
-            //System.out.println("Password ["+password+"] Length: "+password.length());
-            //System.out.println("Confirm Password ["+Cpassword+"] Length: "+Cpassword.length());
-        }else if(pass.length() <= 7)
-        {
-            JOptionPane.showMessageDialog(null, "Password Must Exceed 8 Characters");
-        }else if(!e.contains("@") && !e.contains(".com"))
-        {
-            JOptionPane.showMessageDialog(null, "Enter Valid Email");
-        }else if(duplicateCheck())
-        {
-            System.out.println("Duplicate Exists");
-        }else if (dbc.insertData("INSERT INTO tbl_accounts (u_username, u_accType, u_pass, u_email, u_status) "
-        + "VALUES ('" + uname + "', '"+at+"','" + pass + "','" + e + "', 'Pending')"))
-        {
-            JOptionPane.showMessageDialog(null, "Registered succesfully!");
-            U_Admin ua = new U_Admin();
-            ua.setVisible(true);
-            this.dispose();
+    try {
+        // Hash the password using passwordHasher
+        String hashedPassword = passwordHasher.hashPassword(pass);
+
+        // Use a PreparedStatement to avoid SQL injection
+        String insertQuery = "INSERT INTO tbl_accounts (u_username, u_accType, u_pass, u_email, u_status) "
+                           + "VALUES (?, ?, ?, ?, 'Pending')";
+
+        try (Connection conn = dbc.getConnection();
+             PreparedStatement pst = conn.prepareStatement(insertQuery)) {
+            
+            pst.setString(1, uname);
+            pst.setString(2, at);
+            pst.setString(3, hashedPassword); // Store the hashed password
+            pst.setString(4, e);
+
+            int rowsInserted = pst.executeUpdate();
+            if (rowsInserted > 0) {
+                JOptionPane.showMessageDialog(null, "Registered Successfully!");
+                new U_Admin().setVisible(true);
+                this.dispose();
+            } else {
+                JOptionPane.showMessageDialog(null, "Registration Failed!");
+            }
         }
+    } catch (Exception ex) {
+        JOptionPane.showMessageDialog(null, "Error: " + ex.getMessage(), "Error", JOptionPane.ERROR_MESSAGE);
+    }
     }//GEN-LAST:event_addActionPerformed
 
     private void accTypeActionPerformed(java.awt.event.ActionEvent evt) {//GEN-FIRST:event_accTypeActionPerformed
@@ -376,97 +398,82 @@ public class CreateUserForm extends javax.swing.JFrame {
     }//GEN-LAST:event_UIDActionPerformed
 
     private void updateActionPerformed(java.awt.event.ActionEvent evt) {//GEN-FIRST:event_updateActionPerformed
-  String userId = UID.getText().trim(); 
-    String newEmail = em.getText().trim();
-    String newUsername = un.getText().trim();
+    String id = UID.getText().trim(); 
+    String email = em.getText().trim();
+    String username = un.getText().trim();
     String password = new String(pass.getPassword()); 
-    String confirmPassword = new String(Cpassword.getPassword()); 
-    
-    this.UID.setEditable(true);  // Allow text retrieval
-    this.UID.setEditable(false); // Restore its original state
+    String ConfirmPassword = new String(Cpassword.getPassword()); 
 
-    
-    String emailRegex = "^[a-zA-Z0-9_+&*-]+(?:\\.[a-zA-Z0-9_+&*-]+)*@(?:[a-zA-Z0-9-]+\\.)+[a-zA-Z]{2,7}$";
-
-    
-   if (em.getText().isEmpty() || un.getText().isEmpty() || 
-    accType.getSelectedItem() == null || status.getSelectedItem() == null ||
-    password.isEmpty() || confirmPassword.isEmpty()) {
-
-    JOptionPane.showMessageDialog(this, "All fields are required!", "Error", JOptionPane.ERROR_MESSAGE);
-    return;
-}
-  if (userId.isEmpty()) {
-    JOptionPane.showMessageDialog(this, "Error: User ID is missing.", "Error", JOptionPane.ERROR_MESSAGE);
-    return; // Stop execution if User ID is missing
-}
-
-    if (!newEmail.matches(emailRegex)) {
-        JOptionPane.showMessageDialog(this, "Invalid Email! Please enter a valid email address.", "Error", JOptionPane.ERROR_MESSAGE);
-        return;
-    }
-
-    if (!newUsername.matches("[a-zA-Z0-9_]{5,}")) {
-        JOptionPane.showMessageDialog(this, "Invalid Username! Must be at least 5 characters and contain only letters, numbers, and underscores.", "Error", JOptionPane.ERROR_MESSAGE);
-        return;
-    }
-    
-    if (!password.equals(confirmPassword)) {
-    JOptionPane.showMessageDialog(this, "Passwords do not match!", "Error", JOptionPane.ERROR_MESSAGE);
-    return;
-}
-
-    dbConnect dbc = new dbConnect();
-    
-    // Ensure userId is valid before running queries
-    if (this.userId == null || this.userId.isEmpty()) {
+    if (id.isEmpty()) {
         JOptionPane.showMessageDialog(this, "Error: User ID is missing.", "Error", JOptionPane.ERROR_MESSAGE);
         return;
     }
 
-    String checkQuery = "SELECT COUNT(*) FROM tbl_accounts WHERE (u_username = ? OR u_email = ?) AND u_id != ?";
+    // Email validation
+    String emailRegex = "^[a-zA-Z0-9_+&*-]+(?:\\.[a-zA-Z0-9_+&*-]+)*@(?:[a-zA-Z0-9-]+\\.)+[a-zA-Z]{2,7}$";
+    if (!email.matches(emailRegex)) {
+        JOptionPane.showMessageDialog(this, "Invalid Email! Please enter a valid email address.", "Error", JOptionPane.ERROR_MESSAGE);
+        return;
+    }
 
-    try (Connection conn = dbc.getConnection();
-         PreparedStatement pst = conn.prepareStatement(checkQuery)) {
+    // Username validation
+    if (!username.matches("[a-zA-Z0-9_]{5,}")) {
+        JOptionPane.showMessageDialog(this, "Invalid Username! Must be at least 5 characters and contain only letters, numbers, and underscores.", "Error", JOptionPane.ERROR_MESSAGE);
+        return;
+    }
+    
+    // Password validation
+    if (!password.equals(ConfirmPassword)) {
+        JOptionPane.showMessageDialog(this, "Passwords do not match!", "Error", JOptionPane.ERROR_MESSAGE);
+        return;
+    }
 
-       pst.setString(1, un.getText());  // Convert JTextField to String
-       pst.setString(2, em.getText());  // Convert JTextField to String
-       pst.setInt(3, Integer.parseInt(this.UID.getText()));  // Convert to int
+    try {
+        // Hash the password using SHA-256 before storing
+        String hashedPassword = passwordHasher.hashPassword(password);
 
+        dbConnect dbc = new dbConnect();
+        String checkQuery = "SELECT COUNT(*) FROM tbl_accounts WHERE (u_username = ? OR u_email = ?) AND u_id != ?";
+        
+        try (Connection conn = dbc.getConnection();
+             PreparedStatement pst = conn.prepareStatement(checkQuery)) {
 
+            pst.setString(1, username);
+            pst.setString(2, email);
+            pst.setInt(3, Integer.parseInt(id));
 
-        try (ResultSet rs = pst.executeQuery()) {
-            if (rs.next() && rs.getInt(1) > 0) {
-                JOptionPane.showMessageDialog(this, "Username or Email already exists! Please use different credentials.", "Error", JOptionPane.ERROR_MESSAGE);
-                return;
+            try (ResultSet rs = pst.executeQuery()) {
+                if (rs.next() && rs.getInt(1) > 0) {
+                    JOptionPane.showMessageDialog(this, "Username or Email already exists! Please use different credentials.", "Error", JOptionPane.ERROR_MESSAGE);
+                    return;
+                }
+            }
+
+            // Updated Query with hashed password
+            String updateQuery = "UPDATE tbl_accounts SET u_email=?, u_username=?, u_pass=?, u_acctype=?, u_status=? WHERE u_id=?";
+            
+            try (Connection con = DriverManager.getConnection("jdbc:mysql://localhost:3306/milktea_db", "root", "");
+                 PreparedStatement updatePst = con.prepareStatement(updateQuery)) {
+
+                updatePst.setString(1, email);
+                updatePst.setString(2, username);
+                updatePst.setString(3, hashedPassword); // Store the hashed password
+                updatePst.setString(4, accType.getSelectedItem().toString());
+                updatePst.setString(5, status.getSelectedItem().toString());
+                updatePst.setInt(6, Integer.parseInt(id));
+
+                int updated = updatePst.executeUpdate();
+                if (updated > 0) {
+                    JOptionPane.showMessageDialog(this, "User updated successfully!", "Success", JOptionPane.INFORMATION_MESSAGE);
+                    new U_Admin().setVisible(true);
+                    this.dispose();
+                } else {
+                    JOptionPane.showMessageDialog(this, "Update failed!", "Error", JOptionPane.ERROR_MESSAGE);
+                }
             }
         }
-        
-        
-        String updateQuery = "UPDATE tbl_accounts SET u_email = ?, u_username = ?, u_accType = ?, u_status = ?, u_password = ? WHERE u_id = ?";
-        try (PreparedStatement updatePst = conn.prepareStatement(updateQuery)) {
-           updatePst.setString(3, em.getText());
-           updatePst.setString(4, un.getText());
-           updatePst.setString(5, accType.getSelectedItem().toString());
-           updatePst.setString(6, status.getSelectedItem().toString());
-           updatePst.setString(7, new String(pass.getPassword())); 
-updatePst.setString(8, new String(Cpassword.getPassword()));
-
-           updatePst.setInt(9, Integer.parseInt(userId)); 
-
-
-
-            int updated = updatePst.executeUpdate();
-            if (updated > 0) {
-                JOptionPane.showMessageDialog(this, "User updated successfully!", "Success", JOptionPane.INFORMATION_MESSAGE);
-                new U_Admin().setVisible(true);
-                this.dispose();
-            } else {
-                JOptionPane.showMessageDialog(this, "Update failed!", "Error", JOptionPane.ERROR_MESSAGE);
-            }
-        }
-    } catch (SQLException ex) {
-        JOptionPane.showMessageDialog(this, "Database error: " + ex.getMessage(), "Error", JOptionPane.ERROR_MESSAGE);
+    } catch (Exception ex) {
+        JOptionPane.showMessageDialog(this, "Error: " + ex.getMessage(), "Error", JOptionPane.ERROR_MESSAGE);
     }
     }//GEN-LAST:event_updateActionPerformed
 

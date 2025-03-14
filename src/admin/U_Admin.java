@@ -445,7 +445,7 @@ if (rowIndex < 0) {
 
         if (rs.next()) {
             CreateUserForm cuf = new CreateUserForm();
-           cuf.UID.setText(userId); 
+            cuf.UID.setText(userId); 
             cuf.status.setSelectedItem(rs.getString("u_status"));
             cuf.accType.setSelectedItem(rs.getString("u_acctype"));
             cuf.em.setText(rs.getString("u_email"));

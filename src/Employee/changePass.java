@@ -11,9 +11,12 @@ import config.dbConnect;
 import config.passwordHasher;
 import java.awt.Color;
 import java.security.NoSuchAlgorithmException;
+import java.sql.Connection;
+import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import javax.swing.JOptionPane;
+import javax.swing.JPasswordField;
 
 /**
  *
@@ -32,6 +35,11 @@ public class changePass extends javax.swing.JFrame {
     public changePass() {
         initComponents();
     }
+    
+
+
+
+
 
     /**
      * This method is called from within the constructor to initialize the form.
@@ -206,90 +214,70 @@ public class changePass extends javax.swing.JFrame {
     }//GEN-LAST:event_oldPasswordActionPerformed
 
     private void confirmMouseClicked(java.awt.event.MouseEvent evt) {//GEN-FIRST:event_confirmMouseClicked
-        String passw = new String(newPassword.getPassword()).trim();
-        String Cpassw = new String(Cpassword.getPassword()).trim();
+       String passw = new String(newPassword.getPassword()).trim();
+       String Cpassw = new String(Cpassword.getPassword()).trim();
+       String oldPassInput = oldPassword.getText().trim();
+ // Use this for JPasswordField
 
-        if(passw.isEmpty() || Cpassw.isEmpty() || oldPassword.getText().isEmpty())
-        {
-            JOptionPane.showMessageDialog(null, "Please Fill all Boxes");
-        }else if(passw.length() <= 7)
-        {
-            JOptionPane.showMessageDialog(null, "Password Must be Exactly 8 Characters Long");
-        }else if(!passw.equals(Cpassw))
-        {
-            JOptionPane.showMessageDialog(null, "Password does not match");
-        }else if(passw.equals(Cpassw))
-        {
-            try
-            {
-                dbConnect dbc = new dbConnect();
-                Session sess = Session.getInstance();
 
-                String query = "SELECT * FROM tbl_accounts WHERE u_id='"+ sess.getUid() +"'";
-                ResultSet rs = dbc .getData(query);
-                if(rs.next())
-                {
-                    String olddbPassword = rs.getString("u_pass");
-                    String oldhash = passwordHasher.hashPassword(oldPassword.getText());
+if (passw.isEmpty() || Cpassw.isEmpty() || oldPassInput.isEmpty()) {
+    JOptionPane.showMessageDialog(null, "Please fill all fields");
+} else if (passw.length() < 8) {
+    JOptionPane.showMessageDialog(null, "Password must be at least 8 characters long");
+} else if (!passw.equals(Cpassw)) {
+    JOptionPane.showMessageDialog(null, "New password does not match confirmation password");
+} else {
+    try {
+        dbConnect dbc = new dbConnect();
+        Session sess = Session.getInstance();
 
-                    if(olddbPassword.equals(oldhash))
-                    {
+        String query = "SELECT u_pass FROM tbl_accounts WHERE u_id = ?";
+        try (Connection conn = dbc.getConnection();
+             PreparedStatement pst = conn.prepareStatement(query)) {
 
-                        String npass = passwordHasher.hashPassword(newPassword.getText());
-                        dbc.updateData("UPDATE tbl_accounts SET u_pass = '"+npass+"' WHERE u_id = '"+ sess.getUid() +"'");
-                        JOptionPane.showMessageDialog(null, "Updated Succesfully");
-                        EmployeeDashboard ed = new EmployeeDashboard();
-                        ed.setVisible(true);
+            pst.setInt(1, sess.getUid());
+            ResultSet rs = pst.executeQuery();
+
+            if (rs.next()) {
+                String olddbPassword = rs.getString("u_pass");
+                String oldhash = passwordHasher.hashPassword(oldPassInput);
+                String newhash = passwordHasher.hashPassword(passw);
+
+                // Check if the old password matches the stored one
+                if (!olddbPassword.equals(oldhash)) {
+                    JOptionPane.showMessageDialog(null, "Old password is incorrect");
+                    return;
+                }
+
+                // Prevent user from reusing the old password
+                if (olddbPassword.equals(newhash)) {
+                    JOptionPane.showMessageDialog(null, "New password must be different from the old password");
+                    return;
+                }
+
+                // Update the password
+                String updateQuery = "UPDATE tbl_accounts SET u_pass = ? WHERE u_id = ?";
+                try (PreparedStatement updatePst = conn.prepareStatement(updateQuery)) {
+                    updatePst.setString(1, newhash);
+                    updatePst.setInt(2, sess.getUid());
+
+                    int updated = updatePst.executeUpdate();
+                    if (updated > 0) {
+                        JOptionPane.showMessageDialog(null, "Password updated successfully");
+                        new EmployeeDashboard().setVisible(true);
                         this.dispose();
-
-                    }else
-                    {
-                        JOptionPane.showMessageDialog(null, "Old Password is Incorrect");
+                    } else {
+                        JOptionPane.showMessageDialog(null, "Password update failed");
                     }
                 }
-            } catch(SQLException | NoSuchAlgorithmException ex)
-            {
-                System.out.println(""+ex);
+            } else {
+                JOptionPane.showMessageDialog(null, "User not found");
             }
-        }else
-        {
-            JOptionPane.showMessageDialog(null, "Unknown Error Occured");
         }
-        //        String passw = new String(newPassword.getPassword()).trim();
-        //        String Cpass = new String(Cpassword.getPassword()).trim();
-        //        String p = oldPassword.getText().trim();
-        //
-        //
-        //        if(passw.isEmpty() || Cpass.isEmpty())
-        //        {
-            //            JOptionPane.showMessageDialog(null, "Please Fill All Boxes");
-            //
-            //        }else if(!passw.equals(Cpass))
-        //        {
-            //            JOptionPane.showMessageDialog(null, "Password Does Not Match");
-            //            //System.out.println("Password ["+password+"] Length: "+password.length());
-            //            //System.out.println("Confirm Password ["+Cpassword+"] Length: "+Cpassword.length());
-            //        }else if(!p.matches("\\d+"))
-        //        {
-            //            JOptionPane.showMessageDialog(null, "Phone Must Only Contain Numbers");
-            //        }else if(passw.length() <= 7)
-        //        {
-            //            JOptionPane.showMessageDialog(null, "Password Must be Exactly 8 Characters Long");
-            //        }else if(p.length() > 15 || p.length() < 11)
-        //        {
-            //            JOptionPane.showMessageDialog(null, "Invalid Phone num");
-            //        }else
-        //        {
-            //            if(dbc.insertData("INSERT INTO tbl_accounts (u_password, u_phone) "
-                //            + "VALUES ('" + passw + "', '" + p + "')"))
-        //            {
-            //                JOptionPane.showMessageDialog(null, "Registered succesfully!");
-            //                Login l = new Login();
-            //                l.setVisible(true);
-            //                this.dispose();
-            //            }
-        //
-        //        }
+    } catch (SQLException | NoSuchAlgorithmException ex) {
+        JOptionPane.showMessageDialog(null, "Error: " + ex.getMessage(), "Error", JOptionPane.ERROR_MESSAGE);
+    }
+}
 
     }//GEN-LAST:event_confirmMouseClicked
 
